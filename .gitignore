@@ -1,0 +1,15 @@
+!.mvn/wrapper/maven-wrapper.jar
+Thumbs.db
+.DS_Store
+.idea
+.classpath
+.settings
+.userData
+.svn
+npm-debug.log
+node_modules
+WEB-INF
+bower_components
+typings
+.project
+package-lock.json
