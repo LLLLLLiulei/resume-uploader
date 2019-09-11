@@ -318,14 +318,12 @@ utils.extend(Chunk.prototype, {
     let localFile = $.file.encryptPath || $.file.file.path
     resumeUploader.putFile(token, key, localFile, qinniuPutExtra, function(respErr,respBody, respInfo) {
       if (respErr) {
-        $.xhr.readyState = 4
-        if (respErr.isRequestError) {
-          $.xhr.status = err.code
-        } else {
+        if($.xhr){
+          $.xhr.readyState = 4
           $.xhr.status = 500
+          $.xhr.responseText = respErr.message || 'error'
+          doneHandler()
         }
-        $.xhr.responseText = respErr.message || 'error'
-        doneHandler()
         // throw respErr;
         return
       }
@@ -336,10 +334,12 @@ utils.extend(Chunk.prototype, {
         console.log(respInfo.statusCode);
         console.log(respBody);
       }
-      $.xhr.readyState = 4
-      $.xhr.status = 200
-      $.xhr.responseText =JSON.stringify(respBody || {})
-      doneHandler()
+      if($.xhr){
+        $.xhr.readyState = 4
+        $.xhr.status = 200
+        $.xhr.responseText =JSON.stringify(respBody || {})
+        doneHandler()
+      }
     });
 
     $.xhr = {

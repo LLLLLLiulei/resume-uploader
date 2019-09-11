@@ -8,6 +8,8 @@ export function restoreLocalRecord(){
   if(!resumeRecordPath || !fs.existsSync(resumeRecordLogo)){
     return
   }
+
+  this._trigger('restoreLocalRecordStart')
   try {
     let record = fs.readFileSync(resumeRecordLogo).toString()
     record = JSON.parse(record || '[]')
@@ -75,6 +77,8 @@ export function restoreLocalRecord(){
     console.log("TCL: restoreLocalRecord -> files", files)
   } catch (error) {
     console.error(error)
+  }finally{
+    this._trigger('restoreLocalRecordEnd')
   }
 }
 

@@ -75,7 +75,7 @@ function Uploader (opts) {
 
   File.call(this, this)
 
-  this.restoreLocalRecord()
+  this.opts.autoRestoreLocalRecord && this.restoreLocalRecord(0)
 }
 
 Uploader.defaults = {
@@ -657,8 +657,8 @@ utils.extend(Uploader.prototype, {
   },
 
   // 恢复本地上传记录
-  restoreLocalRecord(){
-    setTimeout(_=>{recorder.restoreLocalRecord.call(this)},1000)
+  restoreLocalRecord(timeout=1000){
+    setTimeout(_=>{recorder.restoreLocalRecord.call(this)},timeout)
   },
 
   // 创建单个文件的分块上传记录
