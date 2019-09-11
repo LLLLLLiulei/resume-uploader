@@ -3,6 +3,7 @@ import AliOSS from 'ali-oss'
 import TencentCOS from 'cos-js-sdk-v5'
 import * as qiniu from 'qiniu-js'
 import * as recorder from './recoder'
+import {QiniuResumeUploader,PutExtra} from './qiniuResume'
 
 function Chunk (uploader, file, offset) {
   utils.defineNonEnumerable(this, 'uploader', uploader)
@@ -274,106 +275,78 @@ utils.extend(Chunk.prototype, {
     $.xhr.abort = subscription.unsubscribe.bind(subscription)
   },
 
-  // _qiniuResumeUploadHandler: async function () {
-  //   const $ = this
-  //   const progressHandler = function (loaded, total) {
-  //     $.xhr.readyState = 3
-  //     $.loaded = loaded
-  //     $.total = total
-  //     $._event(STATUS.PROGRESS, {loaded,total})
-  //   }
+  _qiniuResumeUploadHandler: async function () {
+    const $ = this
+    const progressHandler = function (loaded, total) {
+      if($.xhr){
+        $.xhr.readyState = 3
+      }
+      $.loaded = loaded
+      $.total = total
+      $._event(STATUS.PROGRESS, {loaded,total})
+    }
 
-  //   const doneHandler = function (event) {
-  //     // console.log('doneHandler', event)
-  //     let msg = $.message()
-  //     $.processingResponse = true
-  //     $.uploader.opts.processResponse(msg, function (err, res) {
-  //       $.processingResponse = false
-  //       if (!$.xhr) {
-  //         return
-  //       }
-  //       $.processedState = {
-  //         err: err,
-  //         res: res
-  //       }
-  //       let status = $.status()
-  //       if (status === STATUS.SUCCESS || status === STATUS.ERROR) {
-  //         // delete this.data
-  //         $._event(status, res)
-  //         status === STATUS.ERROR && $.uploader.uploadNextChunk()
-  //       }
-  //     })
-  //   }
+    const doneHandler = function (event) {
+      let msg = $.message()
+      $.processingResponse = true
+      $.uploader.opts.processResponse(msg, function (err, res) {
+        $.processingResponse = false
+        if (!$.xhr) {
+          return
+        }
+        $.processedState = {
+          err: err,
+          res: res
+        }
+        let status = $.status()
+        if (status === STATUS.SUCCESS || status === STATUS.ERROR) {
+          // delete this.data
+          $._event(status, res)
+          status === STATUS.ERROR && $.uploader.uploadNextChunk()
+        }
+      })
+    }
 
+    let file = $.bytes
+    let { key, token, putExtra, config } = $.file.ossParams
+    const resumeUploader = new QiniuResumeUploader()
+    let qinniuPutExtra = new PutExtra()
+    qinniuPutExtra.fname=key
+    Object.assign(qinniuPutExtra,putExtra || {})
+    qinniuPutExtra.resumeRecordFile = $.file._resumeLog;
+    qinniuPutExtra.progressCallback = progressHandler
+    let localFile = $.file.encryptPath || $.file.file.path
+    resumeUploader.putFile(token, key, localFile, qinniuPutExtra, function(respErr,respBody, respInfo) {
+      if (respErr) {
+        $.xhr.readyState = 4
+        if (respErr.isRequestError) {
+          $.xhr.status = err.code
+        } else {
+          $.xhr.status = 500
+        }
+        $.xhr.responseText = respErr.message || 'error'
+        doneHandler()
+        // throw respErr;
+        return
+      }
 
+      if (respInfo.statusCode == 200) {
+        console.log(respBody);
+      } else {
+        console.log(respInfo.statusCode);
+        console.log(respBody);
+      }
+      $.xhr.readyState = 4
+      $.xhr.status = 200
+      $.xhr.responseText =JSON.stringify(respBody || {})
+      doneHandler()
+    });
 
-  //   const observer = {
-  //     next (res) {
-  //       $.xhr.readyState = 3
-  //       progressHandler(res.total)
-  //     },
-  //     error (err) {
-  //       console.error(err)
-  //       $.xhr.readyState = 4
-  //       if (err.isRequestError) {
-  //         $.xhr.status = err.code
-  //       } else {
-  //         $.xhr.status = 500
-  //       }
-  //       $.xhr.responseText = err
-  //       doneHandler()
-  //     },
-  //     complete (res) {
-  //       // console.log('complete', res)
-  //       $.xhr.readyState = 4
-  //       $.xhr.status = 200
-  //       $.xhr.responseText = res
-  //       doneHandler()
-  //     }
-  //   }
-
-
-
-
-
-  //   let ossParams = $.file.ossParams
-  //   let file = $.bytes
-  //   let { key, token, putExtra, config } = ossParams
-
-
-  //   const resumeUploader = new qiniu.resume_up.ResumeUploader()
-  //   let putExtra = new qiniu.resume_up.PutExtra()
-  //   putExtra.params = {
-  //     "x:name": "",
-  //     "x:age": 27,
-  //   }
-  //   putExtra.fname = 'testfile.mp4';
-  //   putExtra.resumeRecordFile = 'progress.log';
-  //   putExtra.progressCallback = progressHandler
-  //   let localFile = $.file.encryptPath || $.file.file.path
-  //   resumeUploader.putFile(token, key, localFile, putExtra, function(respErr,respBody, respInfo) {
-  //     if (respErr) {
-  //       throw respErr;
-  //     }
-
-  //     if (respInfo.statusCode == 200) {
-  //       console.log(respBody);
-  //     } else {
-  //       console.log(respInfo.statusCode);
-  //       console.log(respBody);
-  //     }
-  //   });
-
-
-
-  //   const observable = qiniu.upload(file, key, token, putExtra, config)
-  //   $.xhr = {
-  //     readyState: 1,
-  //     abort: _ => 'abort'
-  //   }
-  //   const subscription = observable.subscribe(observer)
-  //   $.xhr.abort = subscription.unsubscribe.bind(subscription)
-  // },
+    $.xhr = {
+      readyState: 1,
+      abort: resumeUploader.abort.bind(resumeUploader)
+    }
+  },
 
   _defaultUploadHandler: function () {
     this.xhr = new XMLHttpRequest()
@@ -452,7 +425,7 @@ utils.extend(Chunk.prototype, {
     this.total = 0
     this.pendingRetry = false
     this.xhr = {}
-
+    // preprocessState
     let preprocess = this.uploader.opts.preprocess
     let read = this.uploader.opts.readFileFn
     if (utils.isFunction(preprocess)) {
@@ -465,22 +438,11 @@ utils.extend(Chunk.prototype, {
           return
       }
     }
-    switch (this.readState) {
-      case 0:
-        this.readState = 1
-        read(this.file, this.file.fileType, this.startByte, this.endByte, this)
-        return
-      case 1:
-        return
-    }
-    if (this.uploader.opts.testChunks && !this.tested) {
-      this.test()
-      return
-    }
 
     let uploaderFnName
     switch (this.uploader.opts.oss) {
       case 'qiniu':
+        // uploaderFnName = '_qiniuResumeUploadHandler'
         uploaderFnName = '_qiniuUploadHandler'
         break
       case 'aliyun':
@@ -493,17 +455,42 @@ utils.extend(Chunk.prototype, {
         uploaderFnName = '_defaultUploadHandler'
         break
     }
+
+    if(uploaderFnName === '_qiniuUploadHandler' && this.uploader.opts.useQiniuResumeUploader){
+      uploaderFnName = '_qiniuResumeUploadHandler'
+    }
+
+
+    switch (this.readState) {
+      case 0:
+        this.readState = 1
+        if(uploaderFnName === '_qiniuResumeUploadHandler'){
+          this.readFinished(this.file.file)
+        }else{
+          read(this.file, this.file.fileType, this.startByte, this.endByte, this)
+        }
+        return
+      case 1:
+        return
+    }
+    if (this.uploader.opts.testChunks && !this.tested) {
+      this.test()
+      return
+    }
+
+
+
     // console.log('uploaderFnName', uploaderFnName)
     utils.isFunction(this[uploaderFnName]) && this[uploaderFnName]()
   },
 
   abort: function () {
     let xhr = this.xhr
-    this.xhr = null
     xhr && xhr.abort()
+    this.xhr =xhr= null
     this.processingResponse = false
     this.processedState = null
-    xhr && xhr.abort()
+    this.xhr && this.xhr.abort()
   },
 
   status: function (isTest) {
@@ -556,11 +543,16 @@ utils.extend(Chunk.prototype, {
     let s = this.status()
     if (s === STATUS.SUCCESS || s === STATUS.ERROR) {
       return 1
-    } else if (s === STATUS.PENDING) {
-      return 0
     } else {
       return this.total > 0 ? this.loaded / this.total : 0
     }
+    // if (s === STATUS.SUCCESS || s === STATUS.ERROR) {
+    //   return 1
+    // } else if (s === STATUS.PENDING) {
+    //   return 0
+    // } else {
+    //   return this.total > 0 ? this.loaded / this.total : 0
+    // }
   },
 
   sizeUploaded: function () {

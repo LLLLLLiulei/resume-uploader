@@ -148,6 +148,7 @@ utils.extend(File.prototype, {
       let newChunk = new Chunk(this.uploader, this, offset)
       let oldChunk = oldChunks.find(i=>i.id===newChunk.id)
       oldChunk && Object.assign(newChunk,oldChunk)
+      newChunk.total = chunks===1?this.file.size:opts.chunkSize
       this.chunks.push(newChunk)
     }
   },
@@ -451,7 +452,7 @@ utils.extend(File.prototype, {
       function (c) {
         if (c.status() === uploadingStatus) {
           c.abort()
-          // this.uploader.uploadNextChunk()
+          this.uploader.uploadNextChunk()
         }
       },
       this

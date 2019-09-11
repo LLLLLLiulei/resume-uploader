@@ -355,6 +355,7 @@ utils.extend(Uploader.prototype, {
           this._triggerAsync('error', file)
           return
         }
+        this._trigger('fileStartUpload', file)
         if (typeof $.opts.beforeChunkUplod === 'function') {
           this._trigger('beforeChunkUplod', file)
           await $.opts.beforeChunkUplod(file)
@@ -362,11 +363,9 @@ utils.extend(Uploader.prototype, {
         utils.each(file.chunks, function (chunk) {
           if (chunk.status() === pendingStatus) {
             let chunkParams = chunk.getParams()
-            let isLastChunk =
-              chunkParams.chunkNumber === chunkParams.totalChunks
+            let isLastChunk = chunkParams.chunkNumber === chunkParams.totalChunks
             if (isLastChunk) {
-              typeof $.opts.beforeLastChunkUplod === 'function' &&
-                $.opts.beforeLastChunkUplod(file, chunk)
+              typeof $.opts.beforeLastChunkUplod === 'function' && $.opts.beforeLastChunkUplod(file, chunk)
             }
             chunk.send()
             found = true

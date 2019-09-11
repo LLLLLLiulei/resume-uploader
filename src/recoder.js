@@ -1,14 +1,13 @@
- // 恢复本地上传记录
-export function restoreLocalRecord(){
-  const fs = require('fs')
-  const path  = require('path')
+const fs = require('fs')
+const path  = require('path')
 
+// 恢复本地上传记录
+export function restoreLocalRecord(){
   let {resumeRecordPath} = this.opts
   let resumeRecordLogo = path.join(resumeRecordPath || '','uploader.json')
   if(!resumeRecordPath || !fs.existsSync(resumeRecordLogo)){
     return
   }
-
   try {
     let record = fs.readFileSync(resumeRecordLogo).toString()
     record = JSON.parse(record || '[]')
@@ -26,8 +25,9 @@ export function restoreLocalRecord(){
       console.log('files.forEach-------------------------------------------')
       let item = record.find(j=>j.path===i.path) ||  {}
       let {chunks,uniqueIdentifier,relativePath,encryptFlag,encryptType,authedUsers,encryptPath,kyesFilePath,_encryptFlag,_encryptType,_authedUsers,_encryptPath,_kyesFilePath}  = item
+      let fileIsModify = i.lastModified!==fs.statSync(i.path).mtime.getTime()
       let assignObj = {
-        chunks:i.lastModified===fs.statSync(i.path).mtime.getTime()? JSON.parse(JSON.stringify(chunks || [])):[],
+        chunks:fileIsModify?[]:JSON.parse(JSON.stringify(chunks || [])),
         uniqueIdentifier,
         relativePath,
         encryptFlag:item.hasOwnProperty('_encryptFlag')?_encryptFlag:encryptFlag,
@@ -46,18 +46,29 @@ export function restoreLocalRecord(){
         i.size = item.size
       }
 
+      let {_resumeLog} = item
       if(i.chunks && i.chunks.length){
-        let {_resumeLog} = item
         if(_resumeLog && fs.existsSync(_resumeLog)){
           let resumeLog = fs.readFileSync(_resumeLog).toString()
-          resumeLog = JSON.parse(resumeLog)
-          i.chunks.forEach(ic=>{
-            let ck = resumeLog.find(j=>j.id===ic.id)
-            if(ck && ck.xhr){
-              Object.assign(ic,{xhr:ck.xhr})
+          resumeLog = JSON.parse(resumeLog || '[]')
+          if(resumeLog && resumeLog.length){
+            let isQiniuCtx = 'ctx' in resumeLog[0] && 'crc32' in resumeLog[0] && 'offset' in resumeLog[0]
+            if(isQiniuCtx && i.chunks.length===1){
+              let loaded = 0
+              resumeLog.forEach(j=>{loaded+=j.offset})
+              i.chunks[0].loaded=loaded
+            }else{
+              i.chunks.forEach(ic=>{
+                let ck = resumeLog.find(j=>j.id===ic.id)
+                if(ck && ck.xhr){
+                  Object.assign(ic,{xhr:ck.xhr})
+                }
+              })
             }
-          })
+          }
         }
+      }else{
+        _resumeLog && fs.writeFileSync(_resumeLog,'[]')
       }
     })
     this.addFiles(files,new Event('restoreEvent'))
@@ -73,26 +84,22 @@ export function createResumeLog(file){
   if(!file){
     return
   }
-  let logs=[]
-  const {chunks,uniqueIdentifier}=file
-  chunks.forEach(chunk=>{
-    let {id} = chunk
-    let log={
-      id,
-      status:0,
-      ctime:Date.now(),
-      mtime:Date.now()
-    }
-    logs.push(log)
-  })
-
-  const fs = require('fs')
-  const path = require('path')
   const opts = this.opts
+  const {chunks,uniqueIdentifier}=file
   !fs.existsSync(opts.resumeRecordPath) && fs.mkdirSync(opts.resumeRecordPath)
   let logFile = path.join(opts.resumeRecordPath,uniqueIdentifier+'.json')
-  !fs.existsSync(logFile) && fs.writeFileSync(logFile,JSON.stringify(logs))
   file._resumeLog = logFile
+  if(file.opts.oss){
+    return
+  }
+  let logs=chunks.map(chunk=>({
+    id:chunk.id,
+    status:0,
+    ctime:Date.now(),
+    mtime:Date.now()
+  }))
+
+  !fs.existsSync(logFile) && fs.writeFileSync(logFile,JSON.stringify(logs))
   console.log(JSON.stringify(logs))
 }
 
@@ -101,7 +108,6 @@ export function addLocalRecord(files=[],fileList=[]){
   console.log("TCL: fileList", fileList)
   console.log("TCL: files", files)
   let list = [...new Set([...files,...fileList])]
-
   list = list.map(i=>{
     let {chunks} = i
     let {path} = i.file || {}
@@ -112,14 +118,14 @@ export function addLocalRecord(files=[],fileList=[]){
   console.log(list,listStr)
 
   let {resumeRecordPath} = this.uploader.opts
-  const path = require('path')
-  const fs = require('fs')
   let logFile = path.join(resumeRecordPath,'uploader.json')
   fs.writeFileSync(logFile,listStr)
 }
 
 export function chunkFinishedResumeRecord(){
-  const fs = require('fs')
+  if(this.file.opts.oss){
+    return
+  }
   try {
     let log = fs.readFileSync(this.file._resumeLog).toString()
     log = JSON.parse(log)
