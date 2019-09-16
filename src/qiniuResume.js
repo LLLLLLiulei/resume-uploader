@@ -6,6 +6,7 @@ import { conf, zone, util, rpc } from 'qiniu'
 import getCrc32 from 'crc32'
 // conf.BLOCK_SIZE=conf.BLOCK_SIZE/4
 
+
 function putReq(config, uploadToken, key, rsStream, rsStreamLen, putExtra, callbackFunc) {
   const progressCallback = (readLen, fileSize) => {
     if(!rsStream || rsStream.destroyed){
@@ -53,7 +54,7 @@ function putReq(config, uploadToken, key, rsStream, rsStreamLen, putExtra, callb
   let finishedCtxList = []
   let finishedBlkPutRets = []
   // read resumeRecordFile
-  if (putExtra.resumeRecordFile) {
+  if (putExtra.resumeRecordFile && fs.existsSync(putExtra.resumeRecordFile)) {
     try {
       let resumeRecords = fs.readFileSync(putExtra.resumeRecordFile).toString()
       let blkputRets = JSON.parse(resumeRecords)
@@ -74,7 +75,7 @@ function putReq(config, uploadToken, key, rsStream, rsStreamLen, putExtra, callb
         finishedBlkPutRets.push(blkputRet)
       }
     } catch (e) {
-      // log(e);
+      console.error(e)
     }
   }
 

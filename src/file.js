@@ -393,7 +393,7 @@ utils.extend(File.prototype, {
       function () {
         this.paused = false
         this.aborted = false
-        this.uploader.upload()
+        this.uploader.upload(undefined,this)
       }
     )
     this.paused = false

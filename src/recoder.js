@@ -44,8 +44,8 @@ export function restoreLocalRecord(){
       assignObj._encryptType = assignObj.encryptType
       assignObj._authedUsers = [...assignObj.authedUsers]
       Object.assign(i,assignObj)
-      if(i._encryptType && i._encryptPath){
-        i.size = item.size
+      if(i._encryptType && i._encryptPath && fs.existsSync(i._encryptPath)){
+        i.size = fs.statSync(i._encryptPath).size
       }
 
       let {_resumeLog} = item
@@ -112,7 +112,7 @@ export function addLocalRecord(files=[],fileList=[]){
   console.log("TCL: fileList", fileList)
   console.log("TCL: files", files)
   let list = [...new Set([...files,...fileList])]
-  list = list.map(i=>{
+  list = list.filter(i=>!i.isComplete()).map(i=>{
     let {chunks} = i
     let {path} = i.file || {}
     return  Object.assign({path,chunks},i)

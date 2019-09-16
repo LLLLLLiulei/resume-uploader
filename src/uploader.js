@@ -295,13 +295,15 @@ utils.extend(Uploader.prototype, {
     return true
   },
 
-  uploadNextChunk: async function (preventEvents) {
+  uploadNextChunk: async function (preventEvents,uploadFile) {
     let $ = this
     let found = false
     let pendingStatus = Chunk.STATUS.PENDING
     let checkChunkUploaded = this.uploader.opts.checkChunkUploadedByResponse
+
+    let thisFiles = uploadFile ? Array.isArray(uploadFile)?uploadFile:[uploadFile]:this.files
     if (this.opts.prioritizeFirstAndLastChunk) {
-      for (let file of this.files) {
+      for (let file of thisFiles) {
         if(file.isComplete() || file.error){
           continue
         }
@@ -341,7 +343,7 @@ utils.extend(Uploader.prototype, {
       }
     }
 
-    for (let file of this.files) {
+    for (let file of thisFiles) {
       if(file.isComplete() || file.error){
         continue
       }
@@ -400,7 +402,7 @@ utils.extend(Uploader.prototype, {
     return outstanding
   },
 
-  upload: async function (preventEvents) {
+  upload: async function (preventEvents,uploadFile) {
     // Make sure we don't start too many uploads at once
     let ret = this._shouldUploadNext()
     if (ret === false) {
@@ -409,7 +411,7 @@ utils.extend(Uploader.prototype, {
     !preventEvents && this._trigger('uploadStart')
     let started = false
     for (let num = 1; num <= this.opts.simultaneousUploads - ret; num++) {
-      started = (await this.uploadNextChunk(!preventEvents)) || started
+      started = (await this.uploadNextChunk(!preventEvents,uploadFile)) || started
       if (!started && preventEvents) {
         // completed
         break
