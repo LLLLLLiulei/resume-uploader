@@ -1,9 +1,12 @@
-import utils from './utils'
-import AliOSS from 'ali-oss'
-import TencentCOS from 'cos-js-sdk-v5'
-import * as qiniu from 'qiniu-js'
-import * as recorder from './recoder'
-import {QiniuResumeUploader,PutExtra} from './qiniuResume'
+const utils = require('./utils')
+const AliOSS = require('ali-oss')
+const TencentCOS = require('cos-js-sdk-v5')
+const qiniu = require('qiniu-js')
+const recorder = require('./recoder')
+const { QiniuResumeUploader, PutExtra } = require('./qiniuResume')
+// import * as qiniu from 'qiniu-js'
+// import * as recorder from './recoder'
+// import {QiniuResumeUploader,PutExtra} from './qiniuResume'
 
 function Chunk (uploader, file, offset) {
   utils.defineNonEnumerable(this, 'uploader', uploader)
@@ -21,7 +24,7 @@ function Chunk (uploader, file, offset) {
   this.startByte = this.offset * this.chunkSize
   this.endByte = this.computeEndByte()
   this.xhr = null
-  this.id = [this.offset,this.startByte,this.endByte].join('-')
+  this.id = [this.offset, this.startByte, this.endByte].join('-')
 }
 
 const STATUS = {
@@ -161,7 +164,7 @@ utils.extend(Chunk.prototype, {
       try {
         let ossParams = $.file.ossParams
         let { key, name, options, ossConfig } = ossParams
-        let {progress} = options || {}
+        let { progress } = options || {}
         options = utils.isObject(options) ? options : {}
         options = utils.extend(options, {
           progress: function (percent, checkpoint) {
@@ -278,12 +281,12 @@ utils.extend(Chunk.prototype, {
   _qiniuResumeUploadHandler: async function () {
     const $ = this
     const progressHandler = function (loaded, total) {
-      if($.xhr){
+      if ($.xhr) {
         $.xhr.readyState = 3
       }
       $.loaded = loaded
       $.total = total
-      $._event(STATUS.PROGRESS, {loaded,total})
+      $._event(STATUS.PROGRESS, { loaded, total })
     }
 
     const doneHandler = function (event) {
@@ -311,14 +314,14 @@ utils.extend(Chunk.prototype, {
     let { key, token, putExtra, config } = $.file.ossParams
     const resumeUploader = new QiniuResumeUploader()
     let qinniuPutExtra = new PutExtra()
-    qinniuPutExtra.fname=key
-    Object.assign(qinniuPutExtra,putExtra || {})
-    qinniuPutExtra.resumeRecordFile = $.file._resumeLog;
+    qinniuPutExtra.fname = key
+    Object.assign(qinniuPutExtra, putExtra || {})
+    qinniuPutExtra.resumeRecordFile = $.file._resumeLog
     qinniuPutExtra.progressCallback = progressHandler
     let localFile = $.file.encryptPath || $.file.file.path
-    resumeUploader.putFile(token, key, localFile, qinniuPutExtra, function(respErr,respBody, respInfo) {
+    resumeUploader.putFile(token, key, localFile, qinniuPutExtra, function (respErr, respBody, respInfo) {
       if (respErr) {
-        if($.xhr){
+        if ($.xhr) {
           $.xhr.readyState = 4
           $.xhr.status = 500
           $.xhr.responseText = respErr.message || 'error'
@@ -329,18 +332,18 @@ utils.extend(Chunk.prototype, {
       }
 
       if (respInfo.statusCode == 200) {
-        console.log(respBody);
+        console.log(respBody)
       } else {
-        console.log(respInfo.statusCode);
-        console.log(respBody);
+        console.log(respInfo.statusCode)
+        console.log(respBody)
       }
-      if($.xhr){
+      if ($.xhr) {
         $.xhr.readyState = 4
         $.xhr.status = 200
-        $.xhr.responseText =JSON.stringify(respBody || {})
+        $.xhr.responseText = JSON.stringify(respBody || {})
         doneHandler()
       }
-    });
+    })
 
     $.xhr = {
       readyState: 1,
@@ -438,9 +441,9 @@ utils.extend(Chunk.prototype, {
           return
       }
     }
-
+    let oss = 'oss' in this.file.opts ? this.file.opts.oss : this.uploader.opts.oss
     let uploaderFnName
-    switch (this.uploader.opts.oss) {
+    switch (oss) {
       case 'qiniu':
         // uploaderFnName = '_qiniuResumeUploadHandler'
         uploaderFnName = '_qiniuUploadHandler'
@@ -456,17 +459,21 @@ utils.extend(Chunk.prototype, {
         break
     }
 
-    if(uploaderFnName === '_qiniuUploadHandler' && this.uploader.opts.useQiniuResumeUploader){
+    let useQiniuResumeUploader = 'useQiniuResumeUploader' in this.file.opts ? this.file.opts.useQiniuResumeUploader : this.uploader.opts.useQiniuResumeUploader
+    if (uploaderFnName === '_qiniuUploadHandler' && useQiniuResumeUploader) {
       uploaderFnName = '_qiniuResumeUploadHandler'
     }
 
+    if (this.readState === 2 && !this.bytes) {
+      this.readState = 0
+    }
 
     switch (this.readState) {
       case 0:
         this.readState = 1
-        if(uploaderFnName === '_qiniuResumeUploadHandler'){
+        if (uploaderFnName === '_qiniuResumeUploadHandler') {
           this.readFinished(this.file.file)
-        }else{
+        } else {
           read(this.file, this.file.fileType, this.startByte, this.endByte, this)
         }
         return
@@ -478,8 +485,6 @@ utils.extend(Chunk.prototype, {
       return
     }
 
-
-
     // console.log('uploaderFnName', uploaderFnName)
     utils.isFunction(this[uploaderFnName]) && this[uploaderFnName]()
   },
@@ -487,7 +492,7 @@ utils.extend(Chunk.prototype, {
   abort: function () {
     let xhr = this.xhr
     xhr && xhr.abort()
-    this.xhr =xhr= null
+    this.xhr = xhr = null
     this.processingResponse = false
     this.processedState = null
     this.xhr && this.xhr.abort()
@@ -617,9 +622,9 @@ utils.extend(Chunk.prototype, {
   },
 
   // 记录分块上传记录
-  _resumeRecord(){
+  _resumeRecord () {
     recorder.chunkFinishedResumeRecord.call(this)
-  },
+  }
 })
 
-export default Chunk
+module.exports = Chunk

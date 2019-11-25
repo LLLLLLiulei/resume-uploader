@@ -1,11 +1,17 @@
-import utils from './utils'
-import event from './event'
-import File from './file'
-import Chunk from './chunk'
-import LocalFile from './localFile'
-import version from '../package.json'
-import * as recorder from './recoder'
-
+const utils = require('./utils')
+// import utils from './utils'
+const event = require('./event')
+const File = require('./file')
+const Chunk = require('./chunk')
+const LocalFile = require('./localFile')
+const version = require('../package.json')
+const recorder = require('./recoder')
+// import event from './event'
+// import File from './file'
+// import Chunk from './chunk'
+// import LocalFile from './localFile'
+// import version from '../package.json'
+// import * as recorder from './recoder'
 
 let oss = ['qiniu', 'aliyun', 'tencent']
 
@@ -215,12 +221,12 @@ utils.extend(Uploader.prototype, {
     this.addFiles([file], evt)
   },
 
-  addFilesByPath(paths) {
+  addFilesByPath (paths) {
     let files = this.createFilesByPath(paths)
     this.addFiles(files, new Event('fileAdded'))
   },
 
-  createFilesByPath(paths){
+  createFilesByPath (paths) {
     if (!Array.isArray(paths)) {
       return
     }
@@ -245,7 +251,7 @@ utils.extend(Uploader.prototype, {
   removeFile: function (file) {
     File.prototype.removeFile.call(this, file)
     this._trigger('fileRemoved', file)
-    //TODO
+    // TODO
     this._addLocalRecord()
   },
 
@@ -275,45 +281,58 @@ utils.extend(Uploader.prototype, {
 
   async dealOssParams (file) {
     try {
-      if (oss.includes(file.opts.oss || this.opts.oss)) {
-        let {ossParams} = file
+      let optsOss = 'oss' in file.opts ? file.opts.oss : this.opts.oss
+      if (oss.includes(optsOss)) {
+        let { ossParams } = file
         if (!utils.isEmptyObject(ossParams)) {
           return true
         }
+        if (!this.opts.ossParams) {
+          return false
+        }
+
         if (typeof this.opts.ossParams === 'function') {
           ossParams = await this.opts.ossParams(file)
         } else if (typeof this.opts.ossParams === 'object') {
           ossParams = utils.extend({}, this.opts.ossParams)
         }
         file.ossParams = utils.extend({}, ossParams)
-        return ossParams && ossParams.key
+        return !!(ossParams && ossParams.key)
       }
     } catch (e) {
       console.error(e)
-      return false
+      throw e
     }
     return true
   },
 
-  uploadNextChunk: async function (preventEvents,uploadFile) {
+  uploadNextChunk: async function (preventEvents, uploadFile) {
     let $ = this
     let found = false
     let pendingStatus = Chunk.STATUS.PENDING
     let checkChunkUploaded = this.uploader.opts.checkChunkUploadedByResponse
 
-    let thisFiles = uploadFile ? Array.isArray(uploadFile)?uploadFile:[uploadFile]:this.files
+    let thisFiles = uploadFile ? Array.isArray(uploadFile) ? uploadFile : [uploadFile] : this.files
     if (this.opts.prioritizeFirstAndLastChunk) {
       for (let file of thisFiles) {
-        if(file.isComplete() || file.error){
+        if (file.isComplete() || file.error) {
           continue
         }
         if (file.paused) {
           return
         }
-        let ossParamsFlag = await this.dealOssParams(file)
+        let ossParamsFlag
+        try {
+          ossParamsFlag = await this.dealOssParams(file)
+        } catch (error) {
+          file._error()
+          this._triggerAsync('fileError', file.getRoot(), file, error.message || '获取参数错误！')
+          continue
+        }
         if (!ossParamsFlag) {
-          this._triggerAsync('error', file)
-          return
+          file._error()
+          this._triggerAsync('fileError', file.getRoot(), file, '获取参数错误！')
+          continue
         }
         if (typeof $.opts.beforeChunkUplod === 'function') {
           this._trigger('beforeChunkUplod', file)
@@ -344,7 +363,7 @@ utils.extend(Uploader.prototype, {
     }
 
     for (let file of thisFiles) {
-      if(file.isComplete() || file.error){
+      if (file.isComplete() || file.error) {
         continue
       }
       if (!file.paused) {
@@ -352,10 +371,18 @@ utils.extend(Uploader.prototype, {
           // waiting for current file's first chunk response
           return
         }
-        let ossParamsFlag = await this.dealOssParams(file)
+        let ossParamsFlag
+        try {
+          ossParamsFlag = await this.dealOssParams(file)
+        } catch (error) {
+          file._error()
+          this._triggerAsync('fileError', file.getRoot(), file, error.message || '获取参数错误！')
+          continue
+        }
         if (!ossParamsFlag) {
-          this._triggerAsync('error', file)
-          return
+          file._error()
+          this._triggerAsync('fileError', file.getRoot(), file, '获取参数错误！')
+          continue
         }
         this._trigger('fileStartUpload', file)
         if (typeof $.opts.beforeChunkUplod === 'function') {
@@ -402,7 +429,7 @@ utils.extend(Uploader.prototype, {
     return outstanding
   },
 
-  upload: async function (preventEvents,uploadFile) {
+  upload: async function (preventEvents, uploadFile) {
     // Make sure we don't start too many uploads at once
     let ret = this._shouldUploadNext()
     if (ret === false) {
@@ -411,7 +438,7 @@ utils.extend(Uploader.prototype, {
     !preventEvents && this._trigger('uploadStart')
     let started = false
     for (let num = 1; num <= this.opts.simultaneousUploads - ret; num++) {
-      started = (await this.uploadNextChunk(!preventEvents,uploadFile)) || started
+      started = (await this.uploadNextChunk(!preventEvents, uploadFile)) || started
       if (!started && preventEvents) {
         // completed
         break
@@ -659,21 +686,20 @@ utils.extend(Uploader.prototype, {
   },
 
   // 恢复本地上传记录
-  restoreLocalRecord(timeout=1000){
-    setTimeout(_=>{recorder.restoreLocalRecord.call(this)},timeout)
+  restoreLocalRecord (timeout = 1000) {
+    setTimeout(_ => { recorder.restoreLocalRecord.call(this) }, timeout)
   },
 
   // 创建单个文件的分块上传记录
-  _createResumeLog(file){
-    recorder.createResumeLog.call(this,file)
+  _createResumeLog (file) {
+    recorder.createResumeLog.call(this, file)
   },
 
-   // 添加本地上传记录
-   _addLocalRecord:function(files=this.uploader.files,fileList=this.uploader.fileList){
-     recorder.addLocalRecord.call(this,files,fileList)
-  },
-
+  // 添加本地上传记录
+  _addLocalRecord: function (files = this.uploader.files, fileList = this.uploader.fileList) {
+    recorder.addLocalRecord.call(this, files, fileList)
+  }
 
 })
 
-export default Uploader
+module.exports = Uploader

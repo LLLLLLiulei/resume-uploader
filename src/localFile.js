@@ -1,8 +1,11 @@
-import fs from 'fs'
-import path from 'path'
-import mime from 'mime'
+const fs = require('fs')
+const path = require('path')
+const mime = require('mime')
+// import fs from 'fs'
+// import path from 'path'
+// import mime from 'mime'
 
-function defineNonEnumerable(target, key, value) {
+function defineNonEnumerable (target, key, value) {
   Object.defineProperty(target, key, {
     enumerable: false,
     configurable: true,
@@ -11,10 +14,10 @@ function defineNonEnumerable(target, key, value) {
   })
 }
 
-function _listFilesPath(pPath) {
+function _listFilesPath (pPath) {
   const getFile = p => {
     let files = fs.readdirSync(p)
-    files.forEach(function(item, index) {
+    files.forEach(function (item, index) {
       let fPath = path.join(p, item)
       let stat = fs.statSync(fPath)
       stat.isDirectory() && getFile(fPath)
@@ -26,14 +29,14 @@ function _listFilesPath(pPath) {
   return fileList
 }
 
-function _listFiles(p) {
+function _listFiles (p) {
   let subFilesPath = _listFilesPath(p)
   let subFiles = subFilesPath.map(filePath => new LocalFile(filePath, p))
   return subFiles
 }
 
 class LocalFile {
-  constructor(filePath, parentPath) {
+  constructor (filePath, parentPath) {
     filePath = filePath ? path.normalize(filePath) : filePath
     parentPath = parentPath ? path.normalize(parentPath) : parentPath
     let stat
@@ -60,24 +63,24 @@ class LocalFile {
     this.lastModifiedDate = mtime
     this.lastModified = mtime.getTime()
   }
-  slice() {
+  slice () {
     // TODO
     // fs.createReadStream()
   }
-  isDirectory() {
+  isDirectory () {
     return this._stat.isDirectory()
   }
-  isFile() {
+  isFile () {
     return this._stat.isFile()
   }
-  listFiles() {
+  listFiles () {
     return _listFiles(this.path)
   }
-  listFilesPath() {
+  listFilesPath () {
     return _listFilesPath(this.path)
   }
 }
 
 LocalFile.listFilesPath = _listFilesPath
 
-export default LocalFile
+module.exports = LocalFile

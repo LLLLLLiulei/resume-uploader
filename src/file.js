@@ -1,5 +1,7 @@
-import utils from './utils'
-import Chunk from './chunk'
+const utils = require('./utils')
+const Chunk = require('./chunk')
+// import utils from './utils'
+// import Chunk from './chunk'
 
 function File (uploader, file, parent) {
   utils.defineNonEnumerable(this, 'uploader', uploader)
@@ -49,17 +51,20 @@ function File (uploader, file, parent) {
   this._prevProgress = 0
 
   // let {_encryptType,_authedUsers} = file
-  file=file|| {}
-  if(typeof file ==='object'){
+  file = file || {}
+  if (typeof file === 'object') {
     this.lastModified = file.lastModified || Date.now()
-    let keys = ['_encryptType','_authedUsers','_encryptFlag','_encryptPath','_kyesFilePath']
-    keys.forEach(k=>{
-      if(k in file){
+    let keys = ['_encryptType', '_authedUsers', '_encryptFlag', '_encryptPath', '_kyesFilePath', '_opts', '__customOpts', '_ossParams', 'ossParams']
+    keys.forEach(k => {
+      if (k in file) {
         this[k] = file[k]
       }
     })
   }
-  this.opts = Object.assign({},uploader.opts)
+  this.opts = this._opts || Object.assign({}, uploader.opts)
+  if ('ossParams' in this) {
+    this.ossParams = this.ossParams || this._ossParams
+  }
 
   this.bootstrap()
 }
@@ -132,7 +137,7 @@ utils.extend(File.prototype, {
 
   bootstrap: function () {
     if (this.isFolder) return
-    let {opts} = this.uploader
+    let { opts } = this.uploader
     if (utils.isFunction(opts.initFileFn)) {
       opts.initFileFn.call(this, this)
     }
@@ -143,14 +148,25 @@ utils.extend(File.prototype, {
     this._prevProgress = 0
     let round = opts.forceChunkSize ? Math.ceil : Math.floor
     let chunks = Math.max(round(this.size / opts.chunkSize), 1)
-    let oldChunks = this.file.chunks && this.file.chunks.length ? this.file.chunks.splice(0,this.file.chunks.length) : []
+    let oldChunks = []
+
+    if (this.file.chunks && this.file.chunks.length) {
+      chunks = this.file.chunks.length
+      oldChunks = this.file.chunks.splice(0, this.file.chunks.length)
+    }
+
+    let chunkSize = this.uploader.opts.chunkSize
+    if (oldChunks && oldChunks.length) {
+      this.uploader.opts.chunkSize = oldChunks[0].id.split('-')[2] - 0
+    }
     for (let offset = 0; offset < chunks; offset++) {
       let newChunk = new Chunk(this.uploader, this, offset)
-      let oldChunk = oldChunks.find(i=>i.id===newChunk.id)
-      oldChunk && Object.assign(newChunk,oldChunk)
-      newChunk.total = chunks===1?this.file.size:opts.chunkSize
+      let oldChunk = oldChunks.find(i => i.id === newChunk.id)
+      oldChunk && Object.assign(newChunk, oldChunk)
+      newChunk.total = chunks === 1 ? this.file.size : opts.chunkSize
       this.chunks.push(newChunk)
     }
+    this.uploader.opts.chunkSize = chunkSize
   },
 
   _measureSpeed: function (hard) {
@@ -205,7 +221,7 @@ utils.extend(File.prototype, {
   },
 
   _chunkEvent: function (chunk, evt, message) {
-    console.log("TCL: chunk, evt, message", chunk, evt, message)
+    console.log('TCL: chunk, evt, message', chunk, evt, message)
     let uploader = this.uploader
     let STATUS = Chunk.STATUS
     let that = this
@@ -246,15 +262,15 @@ utils.extend(File.prototype, {
           this.currentSpeed = 0
           this.averageSpeed = 0
           uploader._trigger('fileSuccess', rootFile, this, message, chunk)
-          let filter=i=>i.uniqueIdentifier!==this.uniqueIdentifier
+          let filter = i => i.uniqueIdentifier !== this.uniqueIdentifier
           if (rootFile.isComplete()) {
             uploader._trigger('fileComplete', rootFile, this)
-            filter=i=>![this.uniqueIdentifier,rootFile.uniqueIdentifier].includes(i.uniqueIdentifier)
+            filter = i => ![this.uniqueIdentifier, rootFile.uniqueIdentifier].includes(i.uniqueIdentifier)
           }
 
           let filteredFileList = this.uploader.fileList.filter(filter) || []
           let filteredFiles = this.uploader.files.filter(filter) || []
-          this.uploader._addLocalRecord.call(this.uploader,filteredFiles,filteredFileList)
+          this.uploader._addLocalRecord.call(this.uploader, filteredFiles, filteredFileList)
           // const fs = require('fs')
           // if(this._resumeLog && fs.existsSync(this._resumeLog) ){
           //   fs.unlink(this._resumeLog)
@@ -373,7 +389,7 @@ utils.extend(File.prototype, {
         }
       },
       function () {
-        let uploadingStatus = [Chunk.STATUS.UPLOADING,Chunk.STATUS.READING]
+        let uploadingStatus = [Chunk.STATUS.UPLOADING, Chunk.STATUS.READING]
         utils.each(this.chunks, function (chunk) {
           if (uploadingStatus.includes(chunk.status())) {
             uploading = true
@@ -393,7 +409,7 @@ utils.extend(File.prototype, {
       function () {
         this.paused = false
         this.aborted = false
-        this.uploader.upload(undefined,this)
+        this.uploader.upload(undefined, this)
       }
     )
     this.paused = false
@@ -401,7 +417,7 @@ utils.extend(File.prototype, {
   },
 
   pause: function () {
-    console.log("TCL: pause")
+    console.log('TCL: pause')
     this._eachAccess(
       function (f) {
         f.pause()
@@ -435,7 +451,7 @@ utils.extend(File.prototype, {
   },
 
   abort: function (reset) {
-    console.log("TCL: reset", reset)
+    console.log('TCL: reset', reset)
     if (this.aborted) {
       return
     }
@@ -665,5 +681,4 @@ utils.extend(File.prototype, {
   }
 })
 
-export default File
-
+module.exports = File
