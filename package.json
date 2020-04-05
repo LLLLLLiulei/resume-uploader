@@ -1,6 +1,6 @@
 {
   "name": "resume-uploader",
-  "version": "0.0.2",
+  "version": "0.0.7",
   "author": "llliu <liulei_real@foxmail.com>",
   "license": "MIT",
   "repository": {
@@ -25,7 +25,6 @@
   },
   "dependencies": {
     "ali-oss": "^6.0.2",
-    "cos-js-sdk-v5": "^0.5.12",
     "mime": "^2.4.4",
     "qiniu": "^7.2.2",
     "qiniu-js": "^2.5.3",

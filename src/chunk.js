@@ -1,6 +1,5 @@
 const utils = require('./utils')
 const AliOSS = require('ali-oss')
-const TencentCOS = require('cos-js-sdk-v5')
 const qiniu = require('qiniu-js')
 const recorder = require('./recoder')
 const { QiniuResumeUploader, PutExtra } = require('./qiniuResume')
@@ -420,7 +419,6 @@ utils.extend(Chunk.prototype, {
   _tencentUploadHandler: function () {
     // TODO
     console.log('TODO')
-    console.log(TencentCOS)
   },
 
   send: function () {
